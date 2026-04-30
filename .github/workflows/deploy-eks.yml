@@ -1,0 +1,88 @@
+name: Backend → EKS Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# ──────────────────────────────────────────────────────────────────────────
+# 이 repo의 GitHub Secrets에 등록할 값:
+#   AWS_ACCESS_KEY_ID          IAM 액세스 키
+#   AWS_SECRET_ACCESS_KEY      IAM 시크릿 키
+#   ECR_BACKEND_URI            terraform output -raw ecr_backend_repository_url
+#   EKS_CLUSTER_NAME           terraform output -raw eks_cluster_name
+#   BACKEND_SA_ROLE_ARN        terraform output -raw backend_sa_role_arn
+#   DB_URL                     terraform output -raw rds_db_url
+#   DB_USERNAME                terraform var.db_username value
+#   DB_PASSWORD                terraform var.db_password value
+#   S3_BUCKET_NAME             terraform output -raw s3_bucket_name
+# ──────────────────────────────────────────────────────────────────────────
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-west-1' }}
+
+jobs:
+  deploy:
+    name: Build & Deploy Backend
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+          cache: gradle
+
+      - name: Gradle Build
+        run: |
+          chmod +x gradlew
+          ./gradlew clean build -x test
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Docker Build & Push
+        env:
+          ECR: ${{ secrets.ECR_BACKEND_URI }}
+          TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR:$TAG -t $ECR:latest .
+          docker push $ECR:$TAG
+          docker push $ECR:latest
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --region ${{ env.AWS_REGION }} \
+            --name   ${{ secrets.EKS_CLUSTER_NAME }}
+
+      - name: Deploy to EKS
+        env:
+          BACKEND_IMAGE:       "${{ secrets.ECR_BACKEND_URI }}:${{ github.sha }}"
+          BACKEND_SA_ROLE_ARN: ${{ secrets.BACKEND_SA_ROLE_ARN }}
+          DB_URL:              ${{ secrets.DB_URL }}
+          DB_USERNAME:         ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD:         ${{ secrets.DB_PASSWORD }}
+          AWS_REGION:          ${{ env.AWS_REGION }}
+          S3_BUCKET_NAME:      ${{ secrets.S3_BUCKET_NAME }}
+        run: |
+          test -n "$DB_URL"
+          test -n "$DB_USERNAME"
+          test -n "$DB_PASSWORD"
+          kubectl apply -f k8s/namespace.yaml
+          envsubst < k8s/backend.yaml | kubectl apply -f -
+
+      - name: Wait for Rollout
+        run: |
+          kubectl rollout status deployment/backend \
+            -n sample-app --timeout=300s
