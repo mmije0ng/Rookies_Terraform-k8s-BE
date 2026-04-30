@@ -16,6 +16,8 @@ Spring Boot 기반 백엔드 애플리케이션입니다. EKS 내부에서 `back
 - Terraform
 
 ## 전체 AWS 아키텍처
+<img width="1200" height="760" alt="image" src="https://github.com/user-attachments/assets/d9614ee2-8eee-4efc-801b-48d333b72a1c" />
+
 
 ```text
 AWS Region: us-west-1
