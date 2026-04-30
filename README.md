@@ -127,7 +127,7 @@ flowchart LR
 
 프론트엔드는 외부 사용자의 진입점입니다. EKS에서 `LoadBalancer` 타입 Service로 노출되며, AWS Load Balancer를 통해 브라우저 트래픽을 받습니다.
 
-## 아키텍처
+## 백엔드 아키텍처
 
 백엔드는 이 repository에서 관리됩니다.
 
