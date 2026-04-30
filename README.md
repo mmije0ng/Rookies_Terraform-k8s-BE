@@ -1,4 +1,4 @@
-# Sample App Backend
+# AWS EKS Infrastructure Automation with Terraform & Kubernetes
 
 Spring Boot 기반 백엔드 애플리케이션입니다. EKS 내부에서 `backend-service`라는 ClusterIP Service로 실행되며, 프론트엔드 API 호출, S3 파일 업로드/미리보기, RDS MySQL 연결을 담당합니다.
 
