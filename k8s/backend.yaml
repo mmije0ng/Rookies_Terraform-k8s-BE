@@ -62,11 +62,21 @@ spec:
                   key: DB_PASSWORD
             - name: AWS_REGION
               value: "${AWS_REGION}"
+            - name: AWS_ROLE_ARN
+              value: "${BACKEND_SA_ROLE_ARN}"
+            - name: AWS_WEB_IDENTITY_TOKEN_FILE
+              value: /var/run/secrets/eks.amazonaws.com/serviceaccount/token
+            - name: AWS_STS_REGIONAL_ENDPOINTS
+              value: regional
             - name: S3_BUCKET_NAME
               valueFrom:
                 secretKeyRef:
                   name: backend-secret
                   key: S3_BUCKET_NAME
+          volumeMounts:
+            - name: aws-iam-token
+              mountPath: /var/run/secrets/eks.amazonaws.com/serviceaccount
+              readOnly: true
           readinessProbe:
             httpGet:
               path: /health
@@ -86,6 +96,14 @@ spec:
             limits:
               memory: "512Mi"
               cpu: "500m"
+      volumes:
+        - name: aws-iam-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  audience: sts.amazonaws.com
+                  expirationSeconds: 86400
+                  path: token
 ---
 apiVersion: v1
 kind: Service
