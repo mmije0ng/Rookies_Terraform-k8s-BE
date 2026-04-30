@@ -76,9 +76,12 @@ jobs:
           AWS_REGION:          ${{ env.AWS_REGION }}
           S3_BUCKET_NAME:      ${{ secrets.S3_BUCKET_NAME }}
         run: |
+          test -n "$BACKEND_SA_ROLE_ARN"
           test -n "$DB_URL"
           test -n "$DB_USERNAME"
           test -n "$DB_PASSWORD"
+          test -n "$AWS_REGION"
+          test -n "$S3_BUCKET_NAME"
           kubectl apply -f k8s/namespace.yaml
           envsubst < k8s/backend.yaml | kubectl apply -f -
 
