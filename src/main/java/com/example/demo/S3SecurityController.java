@@ -1,69 +1,95 @@
 package com.example.demo;
 
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+import software.amazon.awssdk.awscore.exception.AwsServiceException;
 import software.amazon.awssdk.core.ResponseInputStream;
+import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
-import org.springframework.http.*;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.core.io.InputStreamResource;
-import org.springframework.core.io.Resource;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import org.springframework.beans.factory.annotation.Value;
 
 @RestController
-@CrossOrigin(origins = "*") // 테스트를 위해 모든 오리진 허용
+@CrossOrigin(origins = "*")
 public class S3SecurityController {
 
     private final S3Client s3Client;
-    private final String BUCKET_NAME;
+    private final String bucketName;
 
     public S3SecurityController(S3Client s3Client, @Value("${cloud.aws.s3.bucket}") String bucketName) {
         this.s3Client = s3Client;
-        this.BUCKET_NAME = bucketName;
+        this.bucketName = bucketName;
     }
 
-    // 파일 업로드 API
     @PostMapping("/api/upload")
     public ResponseEntity<String> uploadFile(@RequestParam("file") MultipartFile file) throws IOException {
-        String fileName = file.getOriginalFilename();
+        if (file.isEmpty()) {
+            return ResponseEntity.badRequest().body("Upload failed: file is empty");
+        }
+
+        String fileName = StringUtils.cleanPath(file.getOriginalFilename() == null ? "" : file.getOriginalFilename());
+        if (!StringUtils.hasText(fileName) || fileName.contains("..")) {
+            return ResponseEntity.badRequest().body("Upload failed: invalid file name");
+        }
 
         PutObjectRequest putObjectRequest = PutObjectRequest.builder()
-                .bucket(BUCKET_NAME)
+                .bucket(bucketName)
                 .key(fileName)
-                .contentType(file.getContentType())
+                .contentType(file.getContentType() == null ? MediaType.APPLICATION_OCTET_STREAM_VALUE : file.getContentType())
                 .build();
 
-        // 서버 디스크에 저장하지 않고 입력 스트림에서 바로 S3로 전송
-        s3Client.putObject(putObjectRequest,
-                RequestBody.fromInputStream(file.getInputStream(), file.getSize()));
+        s3Client.putObject(
+                putObjectRequest,
+                RequestBody.fromInputStream(file.getInputStream(), file.getSize())
+        );
 
-        return ResponseEntity.ok("업로드 성공: " + fileName);
+        return ResponseEntity.ok("Upload succeeded: " + fileName);
     }
 
-    // 파일 미리보기 API (S3 주소 은폐)
     @GetMapping("/api/preview/{fileName}")
     public ResponseEntity<Resource> previewFile(@PathVariable String fileName) {
-        // 1. S3 객체 가져오기 요청
         GetObjectRequest getObjectRequest = GetObjectRequest.builder()
-                .bucket(BUCKET_NAME)
+                .bucket(bucketName)
                 .key(fileName)
                 .build();
 
-        // 2. S3로부터 스트림을 직접 열기 (서버 디스크에 저장 X)
         ResponseInputStream<GetObjectResponse> s3Stream = s3Client.getObject(getObjectRequest);
         GetObjectResponse response = s3Stream.response();
-
-        // 3. 스프링 리소스로 변환하여 즉시 반환
-        InputStreamResource resource = new InputStreamResource(s3Stream);
 
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(response.contentType()))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + fileName + "\"")
-                .body(resource);
+                .body(new InputStreamResource(s3Stream));
+    }
+
+    @ExceptionHandler(AwsServiceException.class)
+    public ResponseEntity<String> handleAwsServiceException(AwsServiceException e) {
+        String message = "S3 request failed: " + e.awsErrorDetails().errorCode()
+                + " - " + e.awsErrorDetails().errorMessage();
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(message);
+    }
+
+    @ExceptionHandler(SdkClientException.class)
+    public ResponseEntity<String> handleSdkClientException(SdkClientException e) {
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body("S3 client failed: " + e.getMessage());
     }
 }
