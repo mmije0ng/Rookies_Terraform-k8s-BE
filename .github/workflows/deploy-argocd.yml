@@ -1,0 +1,76 @@
+name: Backend → EKS Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+
+env:
+  AWS_REGION: ap-northeast-2
+
+jobs:
+  deploy:
+    name: Build & Deploy Backend
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+          cache: gradle
+
+      - name: Gradle Build
+        run: |
+          chmod +x gradlew
+          ./gradlew clean build -x test
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Docker Build & Push
+        env:
+          ECR: ${{ secrets.ECR_BACKEND_URI }}
+          TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR:$TAG -t $ECR:latest .
+          docker push $ECR:$TAG
+          docker push $ECR:latest
+
+      - name: Checkout Infra Repository
+        uses: actions/checkout@v3
+        with:
+          repository: mmije0ng/Rookies_Terraform-k8s-infra
+          token: ${{ secrets.ARGOCD_GIT_TOKEN }}   # 인프라 저장소 푸시 권한이 있는 PAT
+          path: infra-repo
+      - name: Update Manifest
+        run: |
+          cd infra-repo
+          # manifests/backend/deployment.yaml 내의 image: 부분을 새 이미지 태그로 변경
+          sed -i "s|image:.*|image: ${{ steps.build-image.outputs.image }}|g" manifests/backend/deployment.yaml
+      - name: Commit and Push Changes
+        run: |
+          cd infra-repo
+          git config --global user.name "github-actions"
+          git config --global user.email "action@github.com"
+          git add manifests/backend/deployment.yaml
+          
+          # 변경사항이 있는 경우에만 커밋 및 푸시
+          if ! git diff-index --quiet HEAD; then
+            git commit -m "chore: update backend image to ${{ github.sha }} [skip ci]"
+            git push origin main
+          else
+            echo "No changes to commit"
+          fi
+        
