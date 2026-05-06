@@ -22,7 +22,7 @@ Spring Boot 기반 백엔드 애플리케이션입니다. EKS 내부에서 `back
 
 사용자 트래픽은 프론트엔드 LoadBalancer를 통해 EKS로 들어오고, 프론트엔드 Pod는 내부 ClusterIP Service인 `backend-service`로 API 요청을 전달합니다. 백엔드 Pod는 RDS MySQL과 S3를 사용하며, S3 접근 권한은 ServiceAccount 기반 IRSA로 주입됩니다.
 
-<img width="1060" height="589" alt="image" src="https://github.com/user-attachments/assets/53334201-36a0-40d2-9c4a-add8e9ec890a" />
+<img width="887" height="534" alt="image" src="https://github.com/user-attachments/assets/2c166e3d-8efb-4da5-8157-0aaf04971175" />
 
 ```mermaid
 flowchart TB
