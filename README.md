@@ -14,13 +14,36 @@ Spring Boot 기반 백엔드 애플리케이션입니다. EKS 내부에서 `back
 - Kubernetes/EKS
 - GitHub Actions
 - Terraform
+- ArgoCD
 
-## 전체 AWS 아키텍처
-<<<<<<< HEAD
-=======
-<img width="1500" height="1160" alt="image" src="https://github.com/user-attachments/assets/8a74258f-0771-4970-99c9-65ff97c9d086" />
+## 아키텍처
 
->>>>>>> 64049c842ab6daff44b7c03dfe9bdb66b321565c
+ArgoCD는 Kubernetes 클러스터 내부에서 동작하며, Git 저장소와 클러스터 사이를 끊임없이 비교하고 맞추는 역할을 합니다.
+
+<img width="1598" height="872" alt="image" src="https://github.com/user-attachments/assets/dbfa732b-7763-402a-9e08-15cba8fd4924" />
+
+```text
+[개발자] -- Push --> [Git Repository] (원하는 상태: Desired State)
+                            ^
+                            | 1. 감시 및 Pull
++---------------------------+----------------------------+
+|                         ArgoCD                        |
+|  +-------------+    +----------------+                |
+|  | API Server  |    | Repo Server    |                |
+|  | (UI / CLI)  |    | (Git 연결,     |                |
+|  +-------------+    | 매니페스트 해석) |                |
+|                     +----------------+                |
+|                                                        |
+|  +-----------------------------------+                 |
+|  | Application Controller            | <- 2. 비교/대조 |
+|  | (상태 감시 & 동기화 실행)         |                 |
+|  +-----------------------------------+                 |
++---------------------------+----------------------------+
+                            | 3. 배포 (Apply)
+                            v
+                [Kubernetes Cluster] (실제 상태: Live State)
+```
+
 ```text
 AWS Region: us-west-1
 
@@ -51,49 +74,132 @@ External services
 
 ```mermaid
 flowchart TB
-  user["User Browser"]
-  gh["GitHub Actions"]
+    users["User Browser"]
 
-  subgraph aws["AWS us-west-1"]
-    subgraph vpc["VPC 10.0.0.0/16"]
-      igw["Internet Gateway"]
+    dev["Developer Git Push"]
+    gh["GitHub Actions"]
+    repo["GitOps Repository<br/>K8s manifests / Helm / Kustomize"]
 
-      subgraph publicSubnets["Public Subnets"]
-        pub1["Public Subnet 1 - 10.0.1.0/24 - us-west-1b"]
-        pub2["Public Subnet 2 - 10.0.2.0/24 - us-west-1c"]
-        nat["NAT Gateway"]
-        nlb["Frontend Service - LoadBalancer"]
-      end
+    subgraph aws["AWS us-west-1"]
 
-      subgraph privateSubnets["Private Subnets"]
-        nodes["EKS Managed Node Group - t3.medium desired 2"]
-        fe["Frontend Pods - replicas 2"]
-        be["Backend Pods - replicas 2"]
-        besvc["backend-service - ClusterIP 8080"]
-        rds["RDS MySQL 8.0 - private only"]
-      end
+        subgraph vpc["VPC 10.0.0.0/16"]
+
+            igw["Internet Gateway"]
+
+            subgraph publicSubnets["Public Subnets"]
+
+                pub1["Public Subnet 1<br/>10.0.1.0/24<br/>us-west-1b"]
+
+                pub2["Public Subnet 2<br/>10.0.2.0/24<br/>us-west-1c"]
+
+                nat["NAT Gateway"]
+
+                lb["AWS Load Balancer<br/>Frontend Service / Ingress"]
+
+            end
+
+            subgraph privateSubnets["Private Subnets"]
+
+                nodes["EKS Managed Node Group<br/>t3.medium desired 2"]
+
+                argocd["ArgoCD<br/>GitOps CD Controller"]
+
+                svc["Kubernetes Service<br/>or Ingress"]
+
+                besvc["backend-service<br/>ClusterIP 8080"]
+
+                subgraph frontendPod["Frontend Pods"]
+
+                    nginx["Nginx"]
+
+                    dist["React dist files"]
+
+                    nginxConf["nginx.conf"]
+
+                    nginx -->|"serve static files"| dist
+
+                    nginxConf -->|"static file route<br/>and API proxy config"| nginx
+
+                end
+
+                subgraph backendPod["Backend Pods"]
+
+                    backend["Spring Boot Backend"]
+
+                end
+
+                rds["RDS MySQL 8.0<br/>private only"]
+
+                s3vpce["S3 Gateway<br/>VPC Endpoint"]
+
+            end
+        end
+
+        ecr["ECR<br/>frontend and backend"]
+
+        s3["S3 Bucket<br/>private"]
+
+        oidc["IAM OIDC Provider"]
+
+        role["backend-sa IAM Role"]
+
     end
 
-    ecr["ECR - backend and frontend"]
-    s3["S3 Bucket - private"]
-    oidc["IAM OIDC Provider"]
-    role["backend-sa IAM Role"]
-  end
+    users -->|"HTTP/HTTPS"| lb
 
-  user -->|"HTTP 80"| nlb
-  nlb --> fe
-  fe -->|"API requests"| besvc
-  besvc --> be
-  be -->|"JDBC 3306"| rds
-  be -->|"AWS SDK"| s3
-  be --> role
-  role --> oidc
-  role --> s3
-  gh -->|"docker push"| ecr
-  gh -->|"kubectl apply"| nodes
-  nodes -->|"pull image"| ecr
-  nodes -->|"outbound traffic"| nat
-  nat --> igw
+    lb --> svc
+
+    svc --> nginx
+
+    svc --> besvc
+
+    nginx -->|"API proxy / request"| besvc
+
+    besvc --> backend
+
+    backend -->|"JDBC 3306"| rds
+
+    backend -->|"AWS SDK"| s3vpce
+
+    s3vpce --> s3
+
+    backend -->|"IRSA web identity token"| oidc
+
+    oidc -->|"AssumeRoleWithWebIdentity"| role
+
+    role -->|"S3 permissions"| s3
+
+    dev --> gh
+
+    gh -->|"docker build"| build["Docker Build"]
+
+    build --> frontendImage["React Frontend Docker Image"]
+
+    build --> backendImage["SpringBoot Backend Docker Image"]
+
+    frontendImage -->|"contains React dist<br/>and nginx.conf"| ecr
+
+    backendImage --> ecr
+
+    gh -->|"update image tag<br/>manifest push"| repo
+
+    argocd -->|"watch / pull manifests"| repo
+
+    argocd -->|"sync apply"| nodes
+
+    argocd -->|"deploy/update"| svc
+
+    argocd -->|"deploy/update"| nginx
+
+    argocd -->|"deploy/update"| backend
+
+    argocd -->|"deploy/update"| besvc
+
+    nodes -->|"pull image"| ecr
+
+    nodes -->|"outbound traffic"| nat
+
+    nat --> igw
 ```
 
 ## 서브넷 구조
