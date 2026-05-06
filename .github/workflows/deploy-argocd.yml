@@ -57,14 +57,14 @@ jobs:
       - name: Update Manifest
         run: |
           cd infra-repo
-          # manifests/backend/deployment.yaml 내의 image: 부분을 새 이미지 태그로 변경
-          sed -i "s|image:.*|image: ${{ steps.build-image.outputs.image }}|g" manifests/backend/deployment.yaml
+          # manifests/backend/backend.yaml 내의 image: 부분을 새 이미지 태그로 변경
+          sed -i "s|image:.*|image: ${{ steps.build-image.outputs.image }}|g" manifests/backend/backend.yaml
       - name: Commit and Push Changes
         run: |
           cd infra-repo
           git config --global user.name "github-actions"
           git config --global user.email "action@github.com"
-          git add manifests/backend/deployment.yaml
+          git add manifests/backend/backend.yaml
           
           # 변경사항이 있는 경우에만 커밋 및 푸시
           if ! git diff-index --quiet HEAD; then
