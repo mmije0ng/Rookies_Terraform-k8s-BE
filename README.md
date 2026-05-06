@@ -16,6 +16,11 @@ Spring Boot 기반 백엔드 애플리케이션입니다. EKS 내부에서 `back
 - Terraform
 
 ## 전체 AWS 아키텍처
+<<<<<<< HEAD
+=======
+<img width="1500" height="1160" alt="image" src="https://github.com/user-attachments/assets/8a74258f-0771-4970-99c9-65ff97c9d086" />
+
+>>>>>>> 64049c842ab6daff44b7c03dfe9bdb66b321565c
 ```text
 AWS Region: us-west-1
 
@@ -124,7 +129,7 @@ flowchart LR
 
 프론트엔드는 외부 사용자의 진입점입니다. EKS에서 `LoadBalancer` 타입 Service로 노출되며, AWS Load Balancer를 통해 브라우저 트래픽을 받습니다.
 
-## 아키텍처
+## 백엔드 아키텍처
 
 백엔드는 이 repository에서 관리됩니다.
 
@@ -137,48 +142,6 @@ flowchart LR
 - Replicas: `2`
 - 배포 이미지: `${BACKEND_IMAGE}`
 
-### 전체 아키텍처
-```mermaid
-flowchart TB
-    users[Users] -->|HTTP/HTTPS| lb[AWS Load Balancer]
-    lb --> svc[Kubernetes Service or Ingress]
-    svc --> frontend[Frontend Pod]
-    svc --> backend[Backend Pod]
-
-    frontend -->|API request| backend
-    backend -->|MySQL 3306| rds[(RDS MySQL)]
-    backend -->|S3 API via IRSA| s3[(S3 Bucket)]
-
-    ci[Developer / CI] -->|docker build / push| ecr[(ECR)]
-    ecr -->|image pull| node[EKS Node Group]
-    node --> frontend
-    node --> backend
-    node -->|outbound internet| nat
-
-    subgraph aws["AWS"]
-        subgraph vpc["VPC 10.0.0.0/16"]
-            subgraph public_subnets["Public Subnets"]
-                lb
-                nat[NAT Gateway]
-                igw[Internet Gateway]
-            end
-
-            subgraph private_subnets["Private Subnets"]
-                node
-                frontend
-                backend
-                rds
-            end
-        end
-
-        ecr
-        s3
-    end
-
-    nat --> igw
-```
-
-### 백엔드 아키텍처
 ```mermaid
 flowchart TB
   fesvc["Frontend Pods"] -->|"API requests"| svc["backend-service - ClusterIP 8080"]

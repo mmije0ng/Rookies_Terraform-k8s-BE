@@ -68,6 +68,8 @@ spec:
               value: /var/run/secrets/eks.amazonaws.com/serviceaccount/token
             - name: AWS_STS_REGIONAL_ENDPOINTS
               value: regional
+            - name: AWS_EC2_METADATA_DISABLED
+              value: "true"
             - name: S3_BUCKET_NAME
               valueFrom:
                 secretKeyRef:
