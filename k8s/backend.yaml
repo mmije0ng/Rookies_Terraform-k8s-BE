@@ -4,7 +4,7 @@ metadata:
   name: backend-sa
   namespace: sample-app
   annotations:
-    eks.amazonaws.com/role-arn: ${BACKEND_SA_ROLE_ARN}
+    eks.amazonaws.com/role-arn: "arn:aws:iam::079000478222:role/sample-app-backend-sa-role"
 ---
 apiVersion: v1
 kind: Secret
@@ -13,10 +13,10 @@ metadata:
   namespace: sample-app
 type: Opaque
 stringData:
-  DB_URL: "${DB_URL}"
-  DB_USERNAME: "${DB_USERNAME}"
-  DB_PASSWORD: "${DB_PASSWORD}"
-  S3_BUCKET_NAME: "${S3_BUCKET_NAME}"
+  DB_URL: "jdbc:mysql://sample-app-mysql.clok8o4a6z4y.us-west-1.rds.amazonaws.com:3306/mydb?serverTimezone=Asia/Seoul&characterEncoding=UTF-8"
+  DB_USERNAME: "admin"
+  DB_PASSWORD: "Madp0116"
+  S3_BUCKET_NAME: "sample-app-dev-files-079000478222-mj"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -41,7 +41,7 @@ spec:
       serviceAccountName: backend-sa
       containers:
         - name: backend
-          image: ${BACKEND_IMAGE}
+          image: 079000478222.dkr.ecr.us-west-1.amazonaws.com/sample-app/backend
           ports:
             - containerPort: 8080
           env:
@@ -61,9 +61,9 @@ spec:
                   name: backend-secret
                   key: DB_PASSWORD
             - name: AWS_REGION
-              value: "${AWS_REGION}"
+              value: us-west-1
             - name: AWS_ROLE_ARN
-              value: "${BACKEND_SA_ROLE_ARN}"
+              value: arn:aws:iam::079000478222:role/sample-app-backend-sa-role
             - name: AWS_WEB_IDENTITY_TOKEN_FILE
               value: /var/run/secrets/eks.amazonaws.com/serviceaccount/token
             - name: AWS_STS_REGIONAL_ENDPOINTS

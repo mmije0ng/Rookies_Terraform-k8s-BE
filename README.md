@@ -16,7 +16,6 @@ Spring Boot 기반 백엔드 애플리케이션입니다. EKS 내부에서 `back
 - Terraform
 
 ## 전체 AWS 아키텍처
-
 ```text
 AWS Region: us-west-1
 
