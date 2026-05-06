@@ -1,5 +1,6 @@
-package com.example.demo;
+package com.example.demo.controller;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
@@ -29,15 +30,13 @@ import java.io.IOException;
 
 @RestController
 @CrossOrigin(origins = "*")
+@RequiredArgsConstructor
 public class S3SecurityController {
 
     private final S3Client s3Client;
-    private final String bucketName;
 
-    public S3SecurityController(S3Client s3Client, @Value("${cloud.aws.s3.bucket}") String bucketName) {
-        this.s3Client = s3Client;
-        this.bucketName = bucketName;
-    }
+    @Value("${cloud.aws.s3.bucket}")
+    private String bucketName;
 
     @PostMapping("/api/upload")
     public ResponseEntity<String> uploadFile(@RequestParam("file") MultipartFile file) throws IOException {
